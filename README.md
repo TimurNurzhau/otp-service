@@ -59,7 +59,7 @@ POST /api/login
 POST /api/otp/generate
 Генерация и отправка OTP кода.
 Тело запроса: operationId (обязательно), channel (email, sms, telegram, file), destination (адрес получателя).
-Возвращает operationId, channel, code и сообщение.
+Возвращает operationId, channel и сообщение. Код не возвращается в ответе.
 
 POST /api/otp/validate
 Проверка OTP кода.
