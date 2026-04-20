@@ -75,7 +75,8 @@ public abstract class BaseHandler implements HttpHandler {
     protected String readRequestBody(HttpExchange exchange) throws IOException {
         byte[] bodyBytes = exchange.getRequestBody().readAllBytes();
         String body = new String(bodyBytes, StandardCharsets.UTF_8);
-        logger.debug("Request body: {}", body);
+        // Логируем тело запроса на уровне INFO (для подробного покрытия)
+        logger.info("Request body: {}", body);
         return body;
     }
 
