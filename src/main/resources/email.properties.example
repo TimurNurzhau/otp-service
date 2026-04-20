@@ -1,0 +1,9 @@
+# Email configuration for SMTP server
+# Copy this file to email.properties and fill in your credentials
+email.username=your_email@gmail.com
+email.password=your_app_password
+email.from=your_email@gmail.com
+mail.smtp.host=smtp.gmail.com
+mail.smtp.port=587
+mail.smtp.auth=true
+mail.smtp.starttls.enable=true

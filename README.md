@@ -1,3 +1,8 @@
+[![CI/CD Pipeline](https://github.com/TimurNurzhau/otp-service/actions/workflows/ci.yml/badge.svg)](https://github.com/TimurNurzhau/otp-service/actions/workflows/ci.yml)
+[![Java Version](https://img.shields.io/badge/Java-17-blue.svg)](https://adoptium.net/)
+[![Maven](https://img.shields.io/badge/Maven-3.6+-red.svg)](https://maven.apache.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)](https://www.postgresql.org/)
+
 OTP Service
 
 Сервис для генерации и проверки одноразовых кодов подтверждения.

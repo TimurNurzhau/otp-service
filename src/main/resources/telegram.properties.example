@@ -1,0 +1,6 @@
+# Telegram Bot configuration
+# Copy this file to telegram.properties and fill in your bot token
+# Create a bot via @BotFather and get your token
+# Start a chat with the bot and get your chat ID from /getUpdates
+telegram.bot.token=your_bot_token_here
+telegram.chat.id=your_chat_id_here
