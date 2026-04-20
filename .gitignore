@@ -1,17 +1,32 @@
+# ============================================
+# COMPILED FILES
+# ============================================
 target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-.kotlin
+*.class
+*.jar
+*.war
+*.ear
+
+# ============================================
+# MAVEN
+# ============================================
+.mvn/
+mvnw
+mvnw.cmd
+
+# ============================================
+# IDE FILES
+# ============================================
 
 ### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
 .idea/libraries/
-*.iws
-*.iml
-*.ipr
 
 ### Eclipse ###
 .apt_generated
@@ -23,33 +38,60 @@ target/
 .sts4-cache
 
 ### NetBeans ###
-/nbproject/private/
+/nbproject/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
 build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
 
-### Mac OS ###
+# ============================================
+# OS FILES
+# ============================================
 .DS_Store
+Thumbs.db
+*.swp
+*.lock
 
-### Security ###
-# JWT secret configuration (contains sensitive data)
+# ============================================
+# LOGS
+# ============================================
+logs/
+*.log
+
+# ============================================
+# SECURITY & SECRETS (CRITICAL!)
+# ============================================
+
+# Environment variables file
+.env
+.env.local
+.env.*.local
+
+# Properties files with secrets (never commit these!)
 src/main/resources/jwt.properties
-
-# Database configuration (contains passwords)
 src/main/resources/db.properties
-
-# Email configuration (contains credentials)
 src/main/resources/email.properties
-
-# SMS configuration (contains credentials)
 src/main/resources/sms.properties
-
-# Telegram configuration (contains bot token)
 src/main/resources/telegram.properties
+
+# Any other .properties files that might contain secrets
+*.properties
+!*.properties.example
+!*.properties.template
+!*.properties.sample
+
+# ============================================
+# APPLICATION GENERATED FILES
+# ============================================
+otp_codes.txt
+
+# ============================================
+# TEST OUTPUT
+# ============================================
+test-output/
+coverage/
+.surefire/
