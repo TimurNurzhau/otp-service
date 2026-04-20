@@ -20,6 +20,9 @@ public abstract class BaseHandler implements HttpHandler {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
     protected final ObjectMapper objectMapper = new ObjectMapper();
 
+    // ThreadLocal для хранения времени начала запроса
+    private static final ThreadLocal<Long> requestStartTime = new ThreadLocal<>();
+
     protected void sendJsonResponse(HttpExchange exchange, int statusCode, Object response) throws IOException {
         String jsonResponse = objectMapper.writeValueAsString(response);
         byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
@@ -43,6 +46,7 @@ public abstract class BaseHandler implements HttpHandler {
                 message,
                 statusCode);
         sendJsonResponse(exchange, statusCode, error);
+        logResponse(exchange, statusCode);
     }
 
     protected void sendSuccessResponse(HttpExchange exchange, Object data) throws IOException {
@@ -53,6 +57,7 @@ public abstract class BaseHandler implements HttpHandler {
                 exchange.getRequestMethod(),
                 exchange.getRequestURI().getPath());
         sendJsonResponse(exchange, 200, response);
+        logResponse(exchange, 200);
     }
 
     protected void sendSuccessMessage(HttpExchange exchange, String message) throws IOException {
@@ -64,6 +69,7 @@ public abstract class BaseHandler implements HttpHandler {
                 exchange.getRequestURI().getPath(),
                 message);
         sendJsonResponse(exchange, 200, response);
+        logResponse(exchange, 200);
     }
 
     protected String readRequestBody(HttpExchange exchange) throws IOException {
@@ -95,10 +101,25 @@ public abstract class BaseHandler implements HttpHandler {
     }
 
     protected void logRequest(HttpExchange exchange) {
-        logger.info("{} {} - from {}",
+        long startTime = System.currentTimeMillis();
+        requestStartTime.set(startTime);
+        logger.info("→ {} {} - from {}",
                 exchange.getRequestMethod(),
                 exchange.getRequestURI().getPath(),
                 exchange.getRemoteAddress());
+    }
+
+    protected void logResponse(HttpExchange exchange, int statusCode) {
+        Long startTime = requestStartTime.get();
+        if (startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.info("← {} {} - status={}, duration={}ms",
+                    exchange.getRequestMethod(),
+                    exchange.getRequestURI().getPath(),
+                    statusCode,
+                    duration);
+            requestStartTime.remove(); // Очищаем ThreadLocal
+        }
     }
 
     protected void setCorsHeaders(HttpExchange exchange) {
@@ -110,6 +131,7 @@ public abstract class BaseHandler implements HttpHandler {
     protected void handleOptions(HttpExchange exchange) throws IOException {
         setCorsHeaders(exchange);
         exchange.sendResponseHeaders(204, -1);
+        logResponse(exchange, 204);
         exchange.close();
     }
 }

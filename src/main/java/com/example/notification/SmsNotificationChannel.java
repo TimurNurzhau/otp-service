@@ -92,7 +92,7 @@ public class SmsNotificationChannel implements NotificationChannel {
             System.err.println("[SMS ERROR] Failed to send SMS to " + destination + ": " + e.getMessage());
             return false; // Исправлено: возвращаем false при ошибке
         } finally {
-            if (session.getSessionState().isBound()) {
+            if (session != null && session.getSessionState().isBound()) {
                 session.unbindAndClose();
             }
         }
