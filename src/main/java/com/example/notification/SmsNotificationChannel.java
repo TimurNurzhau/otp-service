@@ -89,9 +89,8 @@ public class SmsNotificationChannel implements NotificationChannel {
             return true;
 
         } catch (Exception e) {
-            System.err.println("[SMS EMULATION] Sending code '" + code + "' to " + destination);
-            System.err.println("[SMS ERROR] " + e.getMessage());
-            return true; // Возвращаем true, чтобы не ломать основную логику
+            System.err.println("[SMS ERROR] Failed to send SMS to " + destination + ": " + e.getMessage());
+            return false; // Исправлено: возвращаем false при ошибке
         } finally {
             if (session.getSessionState().isBound()) {
                 session.unbindAndClose();

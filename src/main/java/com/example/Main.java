@@ -4,18 +4,21 @@ import com.example.model.User;
 import com.example.service.OtpService;
 import com.example.service.UserService;
 import com.example.security.JwtUtil;
-import org.mindrot.jbcrypt.BCrypt;
+import at.favre.lib.crypto.bcrypt.BCrypt;
 
 public class Main {
     public static void main(String[] args) {
         System.out.println("=== Testing Libraries ===");
         System.out.println();
 
-        // Test 1: BCrypt (Password Hashing)
+        // Test 1: BCrypt (Password Hashing) - новая версия
         try {
             String password = "test123";
-            String hashed = BCrypt.hashpw(password, BCrypt.gensalt());
-            boolean check = BCrypt.checkpw(password, hashed);
+            String hashed = BCrypt.withDefaults()
+                    .hashToString(12, password.toCharArray());
+            BCrypt.Result result = BCrypt.verifyer()
+                    .verify(password.toCharArray(), hashed);
+            boolean check = result.verified;
             System.out.println("[OK] BCrypt works! Password check: " + check);
         } catch (Exception e) {
             System.out.println("[ERROR] BCrypt failed: " + e.getMessage());
@@ -92,7 +95,7 @@ public class Main {
             System.out.println();
             System.out.println("--- Testing OtpService ---");
 
-            // Генерация кода
+            // Генерация кода через generateOtp (возвращает код для тестов)
             String code = otpService.generateOtp(loggedIn.getId(), "test_operation");
             System.out.println("Generated OTP code: " + code);
             System.out.println("Code length: " + code.length());
@@ -118,21 +121,21 @@ public class Main {
             // Доступные каналы
             System.out.println("Available channels: " + String.join(", ", otpService.getAvailableChannels()));
 
-            // Отправка через FILE
-            String fileCode = otpService.generateAndSendOtp(loggedIn.getId(), "file_test", "file", "test_user");
-            System.out.println("[FILE] Generated and saved code: " + fileCode);
+            // Отправка через FILE (метод void, не возвращает код)
+            otpService.generateAndSendOtp(loggedIn.getId(), "file_test", "file", "test_user");
+            System.out.println("[FILE] OTP code sent to file (check otp_codes.txt)");
 
             // Отправка через EMAIL (эмуляция)
-            String emailCode = otpService.generateAndSendOtp(loggedIn.getId(), "email_test", "email", "test@example.com");
-            System.out.println("[EMAIL] Generated code: " + emailCode);
+            otpService.generateAndSendOtp(loggedIn.getId(), "email_test", "email", "test@example.com");
+            System.out.println("[EMAIL] OTP code sent to email (emulation mode)");
 
             // Отправка через SMS (эмуляция)
-            String smsCode = otpService.generateAndSendOtp(loggedIn.getId(), "sms_test", "sms", "+79001234567");
-            System.out.println("[SMS] Generated code: " + smsCode);
+            otpService.generateAndSendOtp(loggedIn.getId(), "sms_test", "sms", "+79001234567");
+            System.out.println("[SMS] OTP code sent via SMS (emulation mode)");
 
             // Отправка через TELEGRAM (эмуляция)
-            String telegramCode = otpService.generateAndSendOtp(loggedIn.getId(), "telegram_test", "telegram", "123456789");
-            System.out.println("[TELEGRAM] Generated code: " + telegramCode);
+            otpService.generateAndSendOtp(loggedIn.getId(), "telegram_test", "telegram", "123456789");
+            System.out.println("[TELEGRAM] OTP code sent via Telegram (emulation mode)");
 
             System.out.println();
             System.out.println("--- Testing JWT ---");

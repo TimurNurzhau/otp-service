@@ -37,3 +37,19 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Security ###
+# JWT secret configuration (contains sensitive data)
+src/main/resources/jwt.properties
+
+# Database configuration (contains passwords)
+src/main/resources/db.properties
+
+# Email configuration (contains credentials)
+src/main/resources/email.properties
+
+# SMS configuration (contains credentials)
+src/main/resources/sms.properties
+
+# Telegram configuration (contains bot token)
+src/main/resources/telegram.properties

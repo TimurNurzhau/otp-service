@@ -5,8 +5,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 import javax.crypto.SecretKey;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Properties;
 
 /**
  * Утилитарный класс для работы с JWT токенами.
@@ -14,12 +16,40 @@ import java.util.Date;
  */
 public class JwtUtil {
 
-    // Секретный ключ для подписи токенов (в реальном проекте хранится в настройках)
-    private static final String SECRET_STRING = "mySuperSecretKeyForOtpServiceProject2024WithEnoughLength";
-    private static final SecretKey SECRET_KEY = Keys.hmacShaKeyFor(SECRET_STRING.getBytes(StandardCharsets.UTF_8));
+    private static final SecretKey SECRET_KEY;
+    private static final long EXPIRATION_TIME;
 
-    // Время жизни токена — 24 часа (в миллисекундах)
-    private static final long EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+    static {
+        try (InputStream input = JwtUtil.class.getClassLoader()
+                .getResourceAsStream("jwt.properties")) {
+
+            if (input == null) {
+                throw new RuntimeException("jwt.properties not found in classpath");
+            }
+
+            Properties props = new Properties();
+            props.load(input);
+
+            String secretString = props.getProperty("jwt.secret");
+            if (secretString == null || secretString.trim().isEmpty()) {
+                throw new RuntimeException("jwt.secret is not configured");
+            }
+
+            String expirationStr = props.getProperty("jwt.expiration.ms");
+            if (expirationStr == null || expirationStr.trim().isEmpty()) {
+                throw new RuntimeException("jwt.expiration.ms is not configured");
+            }
+
+            SECRET_KEY = Keys.hmacShaKeyFor(secretString.getBytes(StandardCharsets.UTF_8));
+            EXPIRATION_TIME = Long.parseLong(expirationStr);
+
+            System.out.println("[JWT] Configuration loaded successfully");
+
+        } catch (Exception e) {
+            System.err.println("[JWT ERROR] Failed to load configuration: " + e.getMessage());
+            throw new RuntimeException("Failed to initialize JWT configuration", e);
+        }
+    }
 
     /**
      * Генерирует JWT токен для пользователя

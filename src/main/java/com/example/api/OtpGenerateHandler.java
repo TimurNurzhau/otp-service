@@ -75,12 +75,12 @@ public class OtpGenerateHandler extends BaseHandler {
                 return;
             }
 
-            String code = otpService.generateAndSendOtp(userId, operationId, channel, destination);
+            // Генерируем и отправляем код (метод void, ничего не возвращает)
+            otpService.generateAndSendOtp(userId, operationId, channel, destination);
 
             Map<String, Object> response = Map.of(
                     "operationId", operationId,
                     "channel", channel,
-                    "code", code,
                     "message", "OTP code generated and sent via " + channel
             );
 
@@ -88,6 +88,9 @@ public class OtpGenerateHandler extends BaseHandler {
                     userId, operationId, channel, destination);
             sendSuccessResponse(exchange, response);
 
+        } catch (RuntimeException e) {
+            logger.error("Failed to send OTP: {}", e.getMessage());
+            sendErrorResponse(exchange, 500, e.getMessage());
         } catch (IOException e) {
             logger.error("Invalid JSON in request", e);
             sendErrorResponse(exchange, 400, "Invalid JSON format");

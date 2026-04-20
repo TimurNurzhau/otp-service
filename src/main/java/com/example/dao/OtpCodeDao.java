@@ -86,7 +86,9 @@ public class OtpCodeDao {
      * @param operationId ID операции
      * @param code значение кода
      * @return Optional с кодом или пустой Optional
+     * @deprecated Используйте {@link #validateAndUseCode} для атомарной проверки
      */
+    @Deprecated
     public Optional<OtpCode> findByUserOperationAndCode(Long userId, String operationId, String code) throws SQLException {
         String sql = "SELECT id, user_id, operation_id, code, status, created_at, expires_at " +
                 "FROM otp_codes " +
@@ -127,6 +129,44 @@ public class OtpCodeDao {
 
             int affectedRows = stmt.executeUpdate();
             return affectedRows > 0;
+        }
+    }
+
+    /**
+     * Атомарно проверяет и помечает код как USED (если он ACTIVE и не истек)
+     * Это предотвращает race condition при параллельных запросах на валидацию
+     * @param userId ID пользователя
+     * @param operationId ID операции
+     * @param code значение кода
+     * @return true если код был успешно помечен как USED,
+     *         false если код не найден, неактивен или истек
+     */
+    public boolean validateAndUseCode(Long userId, String operationId, String code) throws SQLException {
+        String sql = "UPDATE otp_codes " +
+                "SET status = 'USED'::code_status " +
+                "WHERE user_id = ? " +
+                "AND operation_id = ? " +
+                "AND code = ? " +
+                "AND status = 'ACTIVE'::code_status " +
+                "AND expires_at > ? " +
+                "RETURNING id";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setLong(1, userId);
+            stmt.setString(2, operationId);
+            stmt.setString(3, code);
+            stmt.setTimestamp(4, Timestamp.valueOf(LocalDateTime.now()));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                boolean updated = rs.next();
+                if (updated) {
+                    long id = rs.getLong("id");
+                    System.out.println("[DAO] Code validated and used: id=" + id);
+                }
+                return updated;
+            }
         }
     }
 

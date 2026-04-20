@@ -5,6 +5,8 @@ import com.example.dao.OtpConfigDao;
 import com.example.model.OtpCode;
 import com.example.model.OtpConfig;
 import com.example.notification.NotificationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -15,6 +17,8 @@ import java.util.Random;
  * Генерация, валидация, управление статусами и отправка.
  */
 public class OtpService {
+
+    private static final Logger logger = LoggerFactory.getLogger(OtpService.class);
 
     private final OtpCodeDao otpCodeDao;
     private final OtpConfigDao configDao;
@@ -61,6 +65,9 @@ public class OtpService {
         OtpCode otpCode = new OtpCode(userId, operationId, code, expiresAt);
         otpCodeDao.save(otpCode);
 
+        logger.debug("OTP code generated for user {}: operationId={}, expiresAt={}",
+                userId, operationId, expiresAt);
+
         return code;
     }
 
@@ -70,46 +77,46 @@ public class OtpService {
      * @param operationId ID операции
      * @param channel канал отправки (email, sms, telegram, file)
      * @param destination адрес получателя
-     * @return сгенерированный код
+     * @throws RuntimeException если отправка не удалась
      */
-    public String generateAndSendOtp(Long userId, String operationId,
-                                     String channel, String destination) throws SQLException {
+    public void generateAndSendOtp(Long userId, String operationId,
+                                   String channel, String destination) throws SQLException {
+        // Генерируем код
         String code = generateOtp(userId, operationId);
-        notificationService.send(channel, destination, code);
-        return code;
+
+        // Отправляем через указанный канал
+        boolean sent = notificationService.send(channel, destination, code);
+
+        if (!sent) {
+            logger.error("Failed to send OTP via {} to {} for user {}",
+                    channel, destination, userId);
+            throw new RuntimeException("Failed to send OTP code via " + channel);
+        }
+
+        logger.info("OTP sent successfully via {} to {} for user {}: operationId={}",
+                channel, destination, userId, operationId);
     }
 
     /**
-     * Проверяет OTP-код
+     * Проверяет OTP-код (атомарно, безопасно для многопоточности)
      * @param userId ID пользователя
      * @param operationId ID операции
      * @param code код для проверки
-     * @return true если код верный и активный
+     * @return true если код был успешно проверен и использован
      */
     public boolean validateOtp(Long userId, String operationId, String code) throws SQLException {
-        var otpCodeOpt = otpCodeDao.findByUserOperationAndCode(userId, operationId, code);
+        // Атомарная операция: проверка + обновление в одном запросе
+        boolean validated = otpCodeDao.validateAndUseCode(userId, operationId, code);
 
-        if (otpCodeOpt.isEmpty()) {
-            return false;
+        if (validated) {
+            logger.info("OTP code successfully validated for user {}: operationId={}",
+                    userId, operationId);
+        } else {
+            logger.warn("OTP validation failed for user {}: operationId={}",
+                    userId, operationId);
         }
 
-        OtpCode otpCode = otpCodeOpt.get();
-
-        // Проверяем статус
-        if (!otpCode.isActive()) {
-            return false;
-        }
-
-        // Проверяем срок действия
-        if (otpCode.isExpired()) {
-            otpCodeDao.updateStatus(otpCode.getId(), OtpCode.CodeStatus.EXPIRED);
-            return false;
-        }
-
-        // Отмечаем как использованный
-        otpCodeDao.updateStatus(otpCode.getId(), OtpCode.CodeStatus.USED);
-
-        return true;
+        return validated;
     }
 
     /**
@@ -123,8 +130,23 @@ public class OtpService {
      * Обновить конфигурацию OTP (только для админа)
      */
     public void updateConfig(int codeLength, int ttlSeconds) throws SQLException {
+        // Валидация параметров
+        if (codeLength < 4 || codeLength > 10) {
+            throw new IllegalArgumentException("codeLength must be between 4 and 10");
+        }
+        if (ttlSeconds < 30 || ttlSeconds > 3600) {
+            throw new IllegalArgumentException("ttlSeconds must be between 30 and 3600");
+        }
+
         OtpConfig config = new OtpConfig(codeLength, ttlSeconds);
-        configDao.update(config);
+        boolean updated = configDao.update(config);
+
+        if (updated) {
+            logger.info("OTP config updated: codeLength={}, ttlSeconds={}", codeLength, ttlSeconds);
+        } else {
+            logger.error("Failed to update OTP config");
+            throw new SQLException("Failed to update OTP configuration");
+        }
     }
 
     /**
@@ -132,5 +154,26 @@ public class OtpService {
      */
     public String[] getAvailableChannels() {
         return notificationService.getAvailableChannels();
+    }
+
+    /**
+     * Деактивирует все активные коды для операции (полезно при повторной генерации)
+     * @param userId ID пользователя
+     * @param operationId ID операции
+     */
+    public void deactivateOldCodes(Long userId, String operationId) throws SQLException {
+        String sql = "UPDATE otp_codes SET status = 'EXPIRED'::code_status " +
+                "WHERE user_id = ? AND operation_id = ? AND status = 'ACTIVE'::code_status";
+
+        try (var conn = com.example.config.DatabaseConnection.getConnection();
+             var stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, userId);
+            stmt.setString(2, operationId);
+            int deactivated = stmt.executeUpdate();
+            if (deactivated > 0) {
+                logger.info("Deactivated {} old codes for user {}: operationId={}",
+                        deactivated, userId, operationId);
+            }
+        }
     }
 }
