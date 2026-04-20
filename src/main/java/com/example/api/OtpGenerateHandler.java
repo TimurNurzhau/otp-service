@@ -66,6 +66,7 @@ public class OtpGenerateHandler extends BaseHandler {
             }
 
             if (!channelValid) {
+                logger.warn("Invalid channel requested: {}", channel);
                 sendErrorResponse(exchange, 400, "Invalid channel. Available: " + String.join(", ", availableChannels));
                 return;
             }

@@ -46,6 +46,7 @@ public class OtpValidateHandler extends BaseHandler {
 
             if (operationId == null || code == null) {
                 sendErrorResponse(exchange, 400, "operationId and code required");
+                logger.warn("Missing required fields: operationId={}, code={}", operationId, code);
                 return;
             }
 

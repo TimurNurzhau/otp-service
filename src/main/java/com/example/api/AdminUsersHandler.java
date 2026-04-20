@@ -66,6 +66,14 @@ public class AdminUsersHandler extends BaseHandler {
                 }
 
                 Long userId = Long.parseLong(parts[4]);
+
+                Long currentUserId = JwtUtil.getUserIdFromToken(token);
+                if (currentUserId.equals(userId)) {
+                    logger.warn("Admin attempted to delete own account: userId={}", userId);
+                    sendErrorResponse(exchange, 400, "Cannot delete your own account");
+                    return;
+                }
+
                 boolean deleted = userService.deleteUser(userId);
 
                 if (deleted) {

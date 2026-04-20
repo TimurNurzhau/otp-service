@@ -55,6 +55,8 @@ public class OtpService {
         int codeLength = config.getCodeLength();
         int ttlSeconds = config.getTtlSeconds();
 
+        deactivateOldCodes(userId, operationId);
+
         // Генерируем код
         String code = generateCode(codeLength);
 
