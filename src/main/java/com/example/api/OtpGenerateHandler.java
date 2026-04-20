@@ -19,6 +19,12 @@ public class OtpGenerateHandler extends BaseHandler {
     public void handle(HttpExchange exchange) throws IOException {
         logRequest(exchange);
 
+        // Handle CORS preflight
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            handleOptions(exchange);
+            return;
+        }
+
         if (!"POST".equals(exchange.getRequestMethod())) {
             sendErrorResponse(exchange, 405, "Method not allowed");
             return;
@@ -26,6 +32,7 @@ public class OtpGenerateHandler extends BaseHandler {
 
         String token = extractToken(exchange);
         if (token == null || !JwtUtil.isValidToken(token)) {
+            logger.warn("Unauthorized OTP generation attempt");
             sendErrorResponse(exchange, 401, "Unauthorized");
             return;
         }
@@ -38,8 +45,33 @@ public class OtpGenerateHandler extends BaseHandler {
             String channel = body.getOrDefault("channel", "file");
             String destination = body.get("destination");
 
-            if (operationId == null) {
+            if (operationId == null || operationId.trim().isEmpty()) {
                 sendErrorResponse(exchange, 400, "operationId required");
+                return;
+            }
+
+            if (operationId.length() > 100) {
+                sendErrorResponse(exchange, 400, "operationId too long (max 100 characters)");
+                return;
+            }
+
+            // Валидация канала
+            String[] availableChannels = otpService.getAvailableChannels();
+            boolean channelValid = false;
+            for (String ch : availableChannels) {
+                if (ch.equalsIgnoreCase(channel)) {
+                    channelValid = true;
+                    break;
+                }
+            }
+
+            if (!channelValid) {
+                sendErrorResponse(exchange, 400, "Invalid channel. Available: " + String.join(", ", availableChannels));
+                return;
+            }
+
+            if (destination == null || destination.trim().isEmpty()) {
+                sendErrorResponse(exchange, 400, "destination required");
                 return;
             }
 
@@ -52,10 +84,16 @@ public class OtpGenerateHandler extends BaseHandler {
                     "message", "OTP code generated and sent via " + channel
             );
 
+            logger.info("OTP generated for user {}: operationId={}, channel={}, destination={}",
+                    userId, operationId, channel, destination);
             sendSuccessResponse(exchange, response);
 
+        } catch (IOException e) {
+            logger.error("Invalid JSON in request", e);
+            sendErrorResponse(exchange, 400, "Invalid JSON format");
         } catch (Exception e) {
-            sendErrorResponse(exchange, 500, "Internal server error: " + e.getMessage());
+            logger.error("Unexpected error during OTP generation", e);
+            sendErrorResponse(exchange, 500, "Internal server error");
         }
     }
 }

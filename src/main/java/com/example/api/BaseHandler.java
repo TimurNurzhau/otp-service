@@ -3,6 +3,8 @@ package com.example.api;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -15,6 +17,7 @@ import java.util.Map;
  */
 public abstract class BaseHandler implements HttpHandler {
 
+    protected final Logger logger = LoggerFactory.getLogger(getClass());
     protected final ObjectMapper objectMapper = new ObjectMapper();
 
     protected void sendJsonResponse(HttpExchange exchange, int statusCode, Object response) throws IOException {
@@ -27,11 +30,18 @@ public abstract class BaseHandler implements HttpHandler {
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(responseBytes);
         }
+
+        logger.debug("Response: status={}, body={}", statusCode, jsonResponse);
     }
 
     protected void sendErrorResponse(HttpExchange exchange, int statusCode, String message) throws IOException {
         Map<String, String> error = new HashMap<>();
         error.put("error", message);
+        logger.warn("Error response: {} {} - {} (status={})",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI().getPath(),
+                message,
+                statusCode);
         sendJsonResponse(exchange, statusCode, error);
     }
 
@@ -39,6 +49,9 @@ public abstract class BaseHandler implements HttpHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("data", data);
+        logger.info("Success response: {} {} - data sent",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI().getPath());
         sendJsonResponse(exchange, 200, response);
     }
 
@@ -46,30 +59,57 @@ public abstract class BaseHandler implements HttpHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", message);
+        logger.info("Success response: {} {} - {}",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI().getPath(),
+                message);
         sendJsonResponse(exchange, 200, response);
     }
 
     protected String readRequestBody(HttpExchange exchange) throws IOException {
         byte[] bodyBytes = exchange.getRequestBody().readAllBytes();
-        return new String(bodyBytes, StandardCharsets.UTF_8);
+        String body = new String(bodyBytes, StandardCharsets.UTF_8);
+        logger.debug("Request body: {}", body);
+        return body;
     }
 
     protected <T> T readRequestBody(HttpExchange exchange, Class<T> clazz) throws IOException {
         String body = readRequestBody(exchange);
-        return objectMapper.readValue(body, clazz);
+        try {
+            return objectMapper.readValue(body, clazz);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            logger.error("Invalid JSON format in request body", e);
+            throw new IOException("Invalid JSON format", e);
+        }
     }
 
     protected String extractToken(HttpExchange exchange) {
         String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
+            String token = authHeader.substring(7);
+            logger.debug("Token extracted: {}...", token.substring(0, Math.min(20, token.length())));
+            return token;
         }
+        logger.debug("No Authorization header found");
         return null;
     }
 
     protected void logRequest(HttpExchange exchange) {
-        System.out.println("[" + java.time.LocalDateTime.now() + "] " +
-                exchange.getRequestMethod() + " " +
-                exchange.getRequestURI().getPath());
+        logger.info("{} {} - from {}",
+                exchange.getRequestMethod(),
+                exchange.getRequestURI().getPath(),
+                exchange.getRemoteAddress());
+    }
+
+    protected void setCorsHeaders(HttpExchange exchange) {
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    }
+
+    protected void handleOptions(HttpExchange exchange) throws IOException {
+        setCorsHeaders(exchange);
+        exchange.sendResponseHeaders(204, -1);
+        exchange.close();
     }
 }

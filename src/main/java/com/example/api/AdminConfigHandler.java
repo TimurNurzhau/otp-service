@@ -20,13 +20,21 @@ public class AdminConfigHandler extends BaseHandler {
     public void handle(HttpExchange exchange) throws IOException {
         logRequest(exchange);
 
+        // Handle CORS preflight
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            handleOptions(exchange);
+            return;
+        }
+
         String token = extractToken(exchange);
         if (token == null || !JwtUtil.isValidToken(token)) {
+            logger.warn("Unauthorized admin config access attempt");
             sendErrorResponse(exchange, 401, "Unauthorized");
             return;
         }
 
         if (!JwtUtil.isAdmin(token)) {
+            logger.warn("Non-admin user attempted to access admin config");
             sendErrorResponse(exchange, 403, "Forbidden: Admin access required");
             return;
         }
@@ -40,6 +48,8 @@ public class AdminConfigHandler extends BaseHandler {
                         "codeLength", config.getCodeLength(),
                         "ttlSeconds", config.getTtlSeconds()
                 );
+                logger.info("Admin retrieved OTP config: codeLength={}, ttlSeconds={}",
+                        config.getCodeLength(), config.getTtlSeconds());
                 sendSuccessResponse(exchange, response);
 
             } else if ("PUT".equals(method)) {
@@ -52,15 +62,32 @@ public class AdminConfigHandler extends BaseHandler {
                     return;
                 }
 
+                // Валидация
+                if (codeLength < 4 || codeLength > 10) {
+                    sendErrorResponse(exchange, 400, "codeLength must be between 4 and 10");
+                    return;
+                }
+
+                if (ttlSeconds < 30 || ttlSeconds > 3600) {
+                    sendErrorResponse(exchange, 400, "ttlSeconds must be between 30 and 3600");
+                    return;
+                }
+
                 otpService.updateConfig(codeLength, ttlSeconds);
+                logger.info("Admin updated OTP config: codeLength={}, ttlSeconds={}",
+                        codeLength, ttlSeconds);
                 sendSuccessMessage(exchange, "Configuration updated");
 
             } else {
                 sendErrorResponse(exchange, 405, "Method not allowed");
             }
 
+        } catch (IOException e) {
+            logger.error("Invalid JSON in request", e);
+            sendErrorResponse(exchange, 400, "Invalid JSON format");
         } catch (Exception e) {
-            sendErrorResponse(exchange, 500, "Internal server error: " + e.getMessage());
+            logger.error("Unexpected error in admin config handler", e);
+            sendErrorResponse(exchange, 500, "Internal server error");
         }
     }
 }

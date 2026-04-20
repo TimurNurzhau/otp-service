@@ -19,6 +19,12 @@ public class OtpValidateHandler extends BaseHandler {
     public void handle(HttpExchange exchange) throws IOException {
         logRequest(exchange);
 
+        // Handle CORS preflight
+        if ("OPTIONS".equals(exchange.getRequestMethod())) {
+            handleOptions(exchange);
+            return;
+        }
+
         if (!"POST".equals(exchange.getRequestMethod())) {
             sendErrorResponse(exchange, 405, "Method not allowed");
             return;
@@ -26,6 +32,7 @@ public class OtpValidateHandler extends BaseHandler {
 
         String token = extractToken(exchange);
         if (token == null || !JwtUtil.isValidToken(token)) {
+            logger.warn("Unauthorized OTP validation attempt");
             sendErrorResponse(exchange, 401, "Unauthorized");
             return;
         }
@@ -42,6 +49,16 @@ public class OtpValidateHandler extends BaseHandler {
                 return;
             }
 
+            if (operationId.trim().isEmpty() || code.trim().isEmpty()) {
+                sendErrorResponse(exchange, 400, "operationId and code cannot be empty");
+                return;
+            }
+
+            if (!code.matches("\\d+")) {
+                sendErrorResponse(exchange, 400, "Code must contain only digits");
+                return;
+            }
+
             boolean valid = otpService.validateOtp(userId, operationId, code);
 
             Map<String, Object> response = Map.of(
@@ -50,9 +67,15 @@ public class OtpValidateHandler extends BaseHandler {
                     "message", valid ? "Code is valid" : "Invalid or expired code"
             );
 
+            logger.info("OTP validation for user {}: operationId={}, valid={}",
+                    userId, operationId, valid);
             sendSuccessResponse(exchange, response);
 
+        } catch (IOException e) {
+            logger.error("Invalid JSON in request", e);
+            sendErrorResponse(exchange, 400, "Invalid JSON format");
         } catch (Exception e) {
+            logger.error("Unexpected error during OTP validation", e);
             sendErrorResponse(exchange, 500, "Internal server error");
         }
     }

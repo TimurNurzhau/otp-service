@@ -6,11 +6,17 @@
         <version>42.7.3</version>
     </dependency>
 
-    <!-- SMPP Library for SMS -->
+    <!-- SMPP Library for SMS (исключаем старую версию SLF4J) -->
     <dependency>
         <groupId>org.jsmpp</groupId>
         <artifactId>jsmpp</artifactId>
         <version>3.0.1</version>
+        <exclusions>
+            <exclusion>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+            </exclusion>
+        </exclusions>
     </dependency>
 
     <!-- Email Library -->
@@ -46,14 +52,14 @@
         <scope>runtime</scope>
     </dependency>
 
-    <!-- SLF4J API -->
+    <!-- SLF4J API - последняя версия -->
     <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-api</artifactId>
         <version>2.0.13</version>
     </dependency>
 
-    <!-- Logging -->
+    <!-- Logback - реализация SLF4J -->
     <dependency>
         <groupId>ch.qos.logback</groupId>
         <artifactId>logback-classic</artifactId>
