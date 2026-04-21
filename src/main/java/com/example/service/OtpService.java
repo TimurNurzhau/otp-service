@@ -365,10 +365,4 @@ public class OtpService {
         return notificationService.getAvailableChannels();
     }
 
-    /**
-     * Проверяет, активен ли канал (настроен ли он)
-     */
-    public boolean isChannelConfigured(String channel) {
-        return notificationService.isConfigured(channel);
-    }
 }
