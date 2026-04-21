@@ -21,6 +21,10 @@ OTP Service
 
 Автоматическая очистка просроченных кодов каждую минуту
 
+Атомарные транзакции для предотвращения race conditions
+
+Graceful shutdown
+
 Требования
 
 Java 17 или новее
@@ -39,17 +43,18 @@ cd otp-service
 Настройка базы данных
 
 Установите PostgreSQL и создайте базу данных otp_service.
-Затем выполните скрипт миграции из папки src/main/resources/db/migration/V1__create_tables.sql
+Затем выполните скрипт миграции:
+psql -U postgres -d otp_service -f src/main/resources/db/migration/V1__create_tables.sql
 
 Настройка переменных окружения
 
-Создайте файл .env в папке src/main/resources/ со следующими переменными:
+Создайте файл .env в папке src/main/resources/:
 
 DB_URL=jdbc:postgresql://localhost:5432/otp_service
 DB_USERNAME=postgres
 DB_PASSWORD=your_password
 
-JWT_SECRET=your_super_secret_key_at_least_32_characters_long
+JWT_SECRET=your_super_secret_key_at_least_32_characters
 
 OTP_ADMIN_USERNAME=admin (опционально)
 OTP_ADMIN_PASSWORD=your_secure_password (опционально)
@@ -69,7 +74,7 @@ mvn clean compile exec:java -Dexec.mainClass="com.example.api.HttpServerApp"
 
 Сервер запустится на порту 8080.
 
-При первом запуске автоматически создаётся администратор. Если пароль не задан в переменных окружения, будет сгенерирован случайный и выведен в консоль. Сохраните его — он будет показан только один раз.
+При первом запуске автоматически создаётся администратор. Если OTP_ADMIN_PASSWORD не задан, генерируется случайный пароль и выводится в консоль. Сохраните его — он будет показан только один раз.
 
 API Endpoints
 
@@ -77,84 +82,86 @@ API Endpoints
 
 POST /api/register
 Регистрация нового пользователя.
-Тело запроса: username и password.
-Возвращает id, username и role созданного пользователя.
+Тело: username, password.
+Ответ: id, username, role.
 
 POST /api/login
 Вход в систему.
-Тело запроса: username и password.
-Возвращает JWT токен, username и role.
+Тело: username, password.
+Ответ: token, username, role.
 
 Пользовательские эндпоинты (требуют токен в заголовке Authorization: Bearer ТОКЕН)
 
 POST /api/otp/generate
 Генерация и отправка OTP кода.
-Тело запроса: operationId (обязательно), channel (email, sms, telegram, file), destination (адрес получателя).
-Возвращает operationId, channel и сообщение. Код не возвращается в ответе.
+Тело: operationId (обязательно), channel (email/sms/telegram/file), destination (адрес получателя).
+Ответ: operationId, channel, message.
 
 POST /api/otp/validate
 Проверка OTP кода.
-Тело запроса: operationId и code.
-Возвращает operationId, valid (true или false) и сообщение.
+Тело: operationId, code.
+Ответ: operationId, valid (true/false), message.
 
 Админские эндпоинты (требуют токен админа)
 
 GET /api/admin/config
-Получить текущие настройки OTP (длина кода и время жизни в секундах).
+Получить текущие настройки OTP.
 
 PUT /api/admin/config
 Изменить настройки OTP.
-Тело запроса: codeLength и ttlSeconds.
-Возвращает сообщение об успехе.
+Тело: codeLength (4-10), ttlSeconds (30-3600).
 
 GET /api/admin/users
 Получить список всех обычных пользователей (без админов).
 
-DELETE /api/admin/users/ID
-Удалить пользователя по его ID.
+DELETE /api/admin/users/{id}
+Удалить пользователя по ID.
 
 Каналы отправки кодов
 
 FILE - сохранение кода в файл otp_codes.txt в корне проекта.
-EMAIL - отправка на почту через SMTP. Требует настройки переменных EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_FROM.
-SMS - отправка через SMPP протокол. Требует запущенный эмулятор SMPPSim.
-TELEGRAM - отправка через Telegram бота. Требует токен бота и chat id.
+EMAIL - отправка на почту через SMTP. Требует переменные EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_FROM.
+SMS - отправка через SMPP протокол. Требует запущенный эмулятор SMPPSim. Если эмулятор не доступен — автоматическая эмуляция.
+TELEGRAM - отправка через Telegram бота. Требует TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.
 
-Если канал не настроен, приложение работает в режиме эмуляции и выводит код в консоль.
+Если канал не настроен или недоступен, приложение автоматически переключается в режим эмуляции.
 
-Тестирование Email (Эмулятор)
+Тестирование каналов
 
-Для тестирования отправки email без реального SMTP сервера:
+Email эмулятор:
 
-Скачайте FakeSMTP с официального сайта https://nilhcem.com/FakeSMTP/download
+Скачайте FakeSMTP: https://nilhcem.com/FakeSMTP/download
+Запустите на порту 2525. Переменные EMAIL оставьте пустыми — приложение переключится в режим эмуляции.
 
-Или через curl:
-curl -L -o fakeSMTP.jar https://github.com/Nilhcem/FakeSMTP/releases/download/v2.2/fakeSMTP-2.2.jar
+SMS эмулятор:
 
-Запустите эмулятор на порту 2525. В переменных окружения EMAIL оставьте пустыми — приложение автоматически переключится в режим эмуляции.
+Скачайте SMPPSim: https://sourceforge.net/projects/smppsim/
+Запустите startsmppsim.bat (Windows) или startsmppsim.sh (Linux/Mac).
+Если эмулятор не запущен, приложение автоматически эмулирует отправку.
 
-SMS (SMPP эмулятор)
+Telegram:
 
-Скачайте SMPPSim с sourceforge.net. Распакуйте архив и запустите startsmppsim.bat для Windows или startsmppsim.sh для Linux/Mac. Если эмулятор не запущен, приложение автоматически переключается в режим эмуляции.
-
-Telegram
-
-Создайте бота у BotFather в Telegram. Получите токен бота. Отправьте любое сообщение вашему боту, затем выполните запрос к API для получения chat_id. Заполните переменные TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.
+Создайте бота у @BotFather в Telegram.
+Получите токен бота.
+Отправьте любое сообщение боту.
+Выполните запрос: https://api.telegram.org/bot{TOKEN}/getUpdates
+Получите chat_id из ответа.
+Заполните переменные TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.
 
 Структура проекта
 
 com.example.api - HTTP обработчики запросов
-com.example.config - конфигурация подключения к базе данных
-com.example.dao - слой доступа к данным (Data Access Object)
+com.example.config - конфигурация (DatabaseConnection, EnvConfig)
+com.example.dao - слой доступа к данным
 com.example.model - модели данных (User, OtpCode, OtpConfig)
 com.example.notification - каналы отправки уведомлений
-com.example.security - утилиты для работы с JWT
-com.example.service - бизнес логика приложения
+com.example.security - JWT утилиты
+com.example.service - бизнес логика
 
 Логирование
 
 Логи пишутся в консоль и в файл logs/otp-service.log.
-Формат логов: дата, время, уровень, класс, сообщение.
+Формат: дата, время, уровень, класс, сообщение.
 
 Автоматическая очистка кодов
 
@@ -162,7 +169,24 @@ com.example.service - бизнес логика приложения
 
 Запуск тестов
 
-Запустите все тесты командой mvn test. Для генерации отчета о покрытии кода выполните mvn jacoco:report. Отчет откроется в папке target/site/jacoco.
+mvn test
+
+Отчёт о покрытии кода:
+
+mvn jacoco:report
+Отчёт откроется в target/site/jacoco/index.html
+
+CI/CD
+
+Проект использует GitHub Actions:
+
+Автоматическая сборка и тестирование при каждом push
+
+Проверка на JDK 17
+
+Запуск тестов с PostgreSQL в Docker
+
+Генерация отчёта о покрытии кода
 
 Автор
 
