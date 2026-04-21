@@ -1,5 +1,6 @@
 package com.example.api;
 
+import com.example.config.EnvConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -22,6 +23,9 @@ public abstract class BaseHandler implements HttpHandler {
 
     // ThreadLocal для хранения времени начала запроса
     private static final ThreadLocal<Long> requestStartTime = new ThreadLocal<>();
+
+    // Константа для CORS (читается из env)
+    private static final String ALLOWED_ORIGIN = EnvConfig.getOrDefault("CORS_ALLOWED_ORIGIN", "http://localhost:3000");
 
     protected void sendJsonResponse(HttpExchange exchange, int statusCode, Object response) throws IOException {
         String jsonResponse = objectMapper.writeValueAsString(response);
@@ -75,8 +79,14 @@ public abstract class BaseHandler implements HttpHandler {
     protected String readRequestBody(HttpExchange exchange) throws IOException {
         byte[] bodyBytes = exchange.getRequestBody().readAllBytes();
         String body = new String(bodyBytes, StandardCharsets.UTF_8);
-        // Логируем тело запроса на уровне INFO (для подробного покрытия)
-        logger.info("Request body: {}", body);
+        // ✅ Логирование тела запроса УБРАНО — пароли не попадают в логи
+        // logger.info("Request body: {}", body);
+
+        // Для отладки можно логировать только для не-чувствительных эндпоинтов
+        String path = exchange.getRequestURI().getPath();
+        if (!path.contains("/login") && !path.contains("/register")) {
+            logger.debug("Request body (non-sensitive): {}", body);
+        }
         return body;
     }
 
@@ -124,7 +134,8 @@ public abstract class BaseHandler implements HttpHandler {
     }
 
     protected void setCorsHeaders(HttpExchange exchange) {
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        // ✅ CORS больше не "*", а читается из переменной окружения
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
     }
