@@ -1,0 +1,121 @@
+[1mdiff --git a/src/main/java/com/example/api/HttpServerApp.java b/src/main/java/com/example/api/HttpServerApp.java[m
+[1mindex 02a88ce..d081c53 100644[m
+[1m--- a/src/main/java/com/example/api/HttpServerApp.java[m
+[1m+++ b/src/main/java/com/example/api/HttpServerApp.java[m
+[36m@@ -1,5 +1,6 @@[m
+ package com.example.api;[m
+ [m
+[32m+[m[32mimport com.example.config.EnvConfig;[m
+ import com.example.dao.OtpCodeDao;[m
+ import com.example.model.User;[m
+ import com.example.service.UserService;[m
+[36m@@ -8,6 +9,7 @@[m [mimport com.sun.net.httpserver.HttpServer;[m
+ import java.io.IOException;[m
+ import java.net.InetSocketAddress;[m
+ import java.net.ServerSocket;[m
+[32m+[m[32mimport java.security.SecureRandom;[m
+ import java.util.concurrent.Executors;[m
+ import java.util.concurrent.ScheduledExecutorService;[m
+ import java.util.concurrent.TimeUnit;[m
+[36m@@ -20,6 +22,7 @@[m [mpublic class HttpServerApp {[m
+ [m
+     private static HttpServer server;[m
+     private static ScheduledExecutorService scheduler;[m
+[32m+[m[32m    private static final SecureRandom SECURE_RANDOM = new SecureRandom();[m
+ [m
+     public static void main(String[] args) throws Exception {[m
+         int desiredPort = 8080;[m
+[36m@@ -68,13 +71,96 @@[m [mpublic class HttpServerApp {[m
+         // Запускаем фоновую очистку просроченных кодов[m
+         startExpiredCodeCleaner();[m
+ [m
+[31m-        // Автоматическое создание админа при первом запуске[m
+[32m+[m[32m        // ✅ Автоматическое создание админа с безопасным паролем[m
+         createAdminIfNotExists();[m
+ [m
+         // Добавляем Graceful Shutdown[m
+         setupShutdownHook();[m
+     }[m
+ [m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Генерирует случайный безопасный пароль[m
+[32m+[m[32m     */[m
+[32m+[m[32m    private static String generateRandomPassword() {[m
+[32m+[m[32m        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";[m
+[32m+[m[32m        StringBuilder password = new StringBuilder(16);[m
+[32m+[m[32m        for (int i = 0; i < 16; i++) {[m
+[32m+[m[32m            password.append(chars.charAt(SECURE_RANDOM.nextInt(chars.length())));[m
+[32m+[m[32m        }[m
+[32m+[m[32m        return password.toString();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Создает администратора при первом запуске приложения[m
+[32m+[m[32m     * ✅ БЕЗОПАСНАЯ ВЕРСИЯ: пароль читается из env или генерируется[m
+[32m+[m[32m     */[m
+[32m+[m[32m    private static void createAdminIfNotExists() {[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            UserService userService = new UserService();[m
+[32m+[m[32m            var allUsers = userService.findAll();[m
+[32m+[m[32m            boolean adminExists = allUsers.stream()[m
+[32m+[m[32m                    .anyMatch(u -> u.getRole() == User.Role.ADMIN);[m
+[32m+[m
+[32m+[m[32m            if (!adminExists) {[m
+[32m+[m[32m                // Читаем из переменных окружения[m
+[32m+[m[32m                String adminUsername = EnvConfig.getOrDefault("OTP_ADMIN_USERNAME", "admin");[m
+[32m+[m[32m                String adminPassword = EnvConfig.get("OTP_ADMIN_PASSWORD");[m
+[32m+[m
+[32m+[m[32m                boolean isGenerated = false;[m
+[32m+[m[32m                if (adminPassword == null || adminPassword.isEmpty()) {[m
+[32m+[m[32m                    // Если пароль не задан в env - генерируем случайный[m
+[32m+[m[32m                    adminPassword = generateRandomPassword();[m
+[32m+[m[32m                    isGenerated = true;[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                User admin = userService.register(adminUsername, adminPassword, User.Role.ADMIN);[m
+[32m+[m
+[32m+[m[32m                System.out.println("\n╔════════════════════════════════════════════════════════════════╗");[m
+[32m+[m[32m                System.out.println("║                    🎯 ADMIN USER CREATED                       ║");[m
+[32m+[m[32m                System.out.println("╠════════════════════════════════════════════════════════════════╣");[m
+[32m+[m[32m                System.out.println("║  Username: " + padRight(adminUsername, 44) + "║");[m
+[32m+[m[32m                System.out.println("║  Password: " + padRight(adminPassword, 44) + "║");[m
+[32m+[m[32m                System.out.println("║  Role:     ADMIN" + padRight("", 41) + "║");[m
+[32m+[m[32m                if (isGenerated) {[m
+[32m+[m[32m                    System.out.println("╠════════════════════════════════════════════════════════════════╣");[m
+[32m+[m[32m                    System.out.println("║  ⚠️  PASSWORD WAS AUTO-GENERATED!                              ║");[m
+[32m+[m[32m                    System.out.println("║  Save this password immediately! It won't be shown again.     ║");[m
+[32m+[m[32m                    System.out.println("║  To set a fixed password, use env variable:                   ║");[m
+[32m+[m[32m                    System.out.println("║  OTP_ADMIN_PASSWORD=your_secure_password                      ║");[m
+[32m+[m[32m                }[m
+[32m+[m[32m                System.out.println("╚════════════════════════════════════════════════════════════════╝\n");[m
+[32m+[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                System.out.println("[INFO] Admin user already exists, skipping creation.");[m
+[32m+[m
+[32m+[m[32m                // Дополнительная безопасность: проверяем, не используется ли дефолтный пароль[m
+[32m+[m[32m                var adminUser = allUsers.stream()[m
+[32m+[m[32m                        .filter(u -> u.getRole() == User.Role.ADMIN)[m
+[32m+[m[32m                        .findFirst();[m
+[32m+[m
+[32m+[m[32m                if (adminUser.isPresent()) {[m
+[32m+[m[32m                    String envPassword = EnvConfig.get("OTP_ADMIN_PASSWORD");[m
+[32m+[m[32m                    if (envPassword != null && !envPassword.isEmpty()) {[m
+[32m+[m[32m                        System.out.println("[INFO] Admin password is set via environment variable");[m
+[32m+[m[32m                    } else {[m
+[32m+[m[32m                        System.out.println("[WARN] Admin password is NOT set via environment variable!");[m
+[32m+[m[32m                        System.out.println("[WARN] Consider setting OTP_ADMIN_PASSWORD for security");[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        } catch (Exception e) {[m
+[32m+[m[32m            System.err.println("[ERROR] Failed to create/check admin: " + e.getMessage());[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Вспомогательный метод для выравнивания строк[m
+[32m+[m[32m     */[m
+[32m+[m[32m    private static String padRight(String s, int length) {[m
+[32m+[m[32m        if (s.length() >= length) return s.substring(0, length);[m
+[32m+[m[32m        return s + " ".repeat(length - s.length());[m
+[32m+
