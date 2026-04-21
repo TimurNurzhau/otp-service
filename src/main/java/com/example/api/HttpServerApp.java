@@ -1,5 +1,6 @@
 package com.example.api;
 
+import com.example.config.EnvConfig;
 import com.example.dao.OtpCodeDao;
 import com.example.model.User;
 import com.example.service.UserService;
@@ -8,6 +9,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.security.SecureRandom;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -20,6 +22,7 @@ public class HttpServerApp {
 
     private static HttpServer server;
     private static ScheduledExecutorService scheduler;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public static void main(String[] args) throws Exception {
         int desiredPort = 8080;
@@ -68,11 +71,94 @@ public class HttpServerApp {
         // Запускаем фоновую очистку просроченных кодов
         startExpiredCodeCleaner();
 
-        // Автоматическое создание админа при первом запуске
+        // ✅ Автоматическое создание админа с безопасным паролем
         createAdminIfNotExists();
 
         // Добавляем Graceful Shutdown
         setupShutdownHook();
+    }
+
+    /**
+     * Генерирует случайный безопасный пароль
+     */
+    private static String generateRandomPassword() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+        StringBuilder password = new StringBuilder(16);
+        for (int i = 0; i < 16; i++) {
+            password.append(chars.charAt(SECURE_RANDOM.nextInt(chars.length())));
+        }
+        return password.toString();
+    }
+
+    /**
+     * Создает администратора при первом запуске приложения
+     * ✅ БЕЗОПАСНАЯ ВЕРСИЯ: пароль читается из env или генерируется
+     */
+    private static void createAdminIfNotExists() {
+        try {
+            UserService userService = new UserService();
+            var allUsers = userService.findAll();
+            boolean adminExists = allUsers.stream()
+                    .anyMatch(u -> u.getRole() == User.Role.ADMIN);
+
+            if (!adminExists) {
+                // Читаем из переменных окружения
+                String adminUsername = EnvConfig.getOrDefault("OTP_ADMIN_USERNAME", "admin");
+                String adminPassword = EnvConfig.get("OTP_ADMIN_PASSWORD");
+
+                boolean isGenerated = false;
+                if (adminPassword == null || adminPassword.isEmpty()) {
+                    // Если пароль не задан в env - генерируем случайный
+                    adminPassword = generateRandomPassword();
+                    isGenerated = true;
+                }
+
+                User admin = userService.register(adminUsername, adminPassword, User.Role.ADMIN);
+
+                System.out.println("\n╔════════════════════════════════════════════════════════════════╗");
+                System.out.println("║                    🎯 ADMIN USER CREATED                       ║");
+                System.out.println("╠════════════════════════════════════════════════════════════════╣");
+                System.out.println("║  Username: " + padRight(adminUsername, 44) + "║");
+                System.out.println("║  Password: " + padRight(adminPassword, 44) + "║");
+                System.out.println("║  Role:     ADMIN" + padRight("", 41) + "║");
+                if (isGenerated) {
+                    System.out.println("╠════════════════════════════════════════════════════════════════╣");
+                    System.out.println("║  ⚠️  PASSWORD WAS AUTO-GENERATED!                              ║");
+                    System.out.println("║  Save this password immediately! It won't be shown again.     ║");
+                    System.out.println("║  To set a fixed password, use env variable:                   ║");
+                    System.out.println("║  OTP_ADMIN_PASSWORD=your_secure_password                      ║");
+                }
+                System.out.println("╚════════════════════════════════════════════════════════════════╝\n");
+
+            } else {
+                System.out.println("[INFO] Admin user already exists, skipping creation.");
+
+                // Дополнительная безопасность: проверяем, не используется ли дефолтный пароль
+                var adminUser = allUsers.stream()
+                        .filter(u -> u.getRole() == User.Role.ADMIN)
+                        .findFirst();
+
+                if (adminUser.isPresent()) {
+                    String envPassword = EnvConfig.get("OTP_ADMIN_PASSWORD");
+                    if (envPassword != null && !envPassword.isEmpty()) {
+                        System.out.println("[INFO] Admin password is set via environment variable");
+                    } else {
+                        System.out.println("[WARN] Admin password is NOT set via environment variable!");
+                        System.out.println("[WARN] Consider setting OTP_ADMIN_PASSWORD for security");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[ERROR] Failed to create/check admin: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Вспомогательный метод для выравнивания строк
+     */
+    private static String padRight(String s, int length) {
+        if (s.length() >= length) return s.substring(0, length);
+        return s + " ".repeat(length - s.length());
     }
 
     /**
@@ -161,33 +247,5 @@ public class HttpServerApp {
             System.out.println("[SHUTDOWN] OTP Service stopped successfully");
             System.out.println("========================================");
         }));
-    }
-
-    /**
-     * Создает администратора при первом запуске приложения
-     */
-    private static void createAdminIfNotExists() {
-        try {
-            UserService userService = new UserService();
-            var allUsers = userService.findAll();
-            boolean adminExists = allUsers.stream()
-                    .anyMatch(u -> u.getRole() == User.Role.ADMIN);
-
-            if (!adminExists) {
-                User admin = userService.register("admin", "admin123", User.Role.ADMIN);
-                System.out.println("\n========================================");
-                System.out.println("🎯 ADMIN USER CREATED AUTOMATICALLY:");
-                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                System.out.println("  Username: admin");
-                System.out.println("  Password: admin123");
-                System.out.println("  Role: ADMIN");
-                System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                System.out.println("========================================\n");
-            } else {
-                System.out.println("[INFO] Admin user already exists, skipping creation.");
-            }
-        } catch (Exception e) {
-            System.out.println("[INFO] Admin check: " + e.getMessage());
-        }
     }
 }
